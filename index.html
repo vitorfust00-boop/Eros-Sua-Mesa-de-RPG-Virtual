@@ -7,6 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/@panzoom/panzoom/dist/panzoom.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
 :root {
@@ -529,7 +531,10 @@ ul#players-list li .dm-badge {
     <!-- Login Screen -->
     <div id="login-screen" class="screen active">
         <div class="glass-panel login-panel">
-            <h1 class="glow-text">Eros</h1>
+            <div style="text-align: center; margin-bottom: -10px;">
+                <img src="logo.png" alt="Eros Logo" style="max-width: 150px; border-radius: 12px; box-shadow: 0 0 20px rgba(102, 252, 241, 0.4);">
+            </div>
+            <h1 class="glow-text hidden">Eros</h1>
             <p class="subtitle">Sua Mesa de RPG Virtual</p>
             
             <div class="input-group">
@@ -599,12 +604,20 @@ ul#players-list li .dm-badge {
             <!-- Quadro 5: Imagem Principal -->
             <div class="panel image-panel">
                 <h2>Cenário / Imagem</h2>
-                <div class="image-container" id="public-image-display-wrapper" style="position: relative;">
+                <div class="image-container" id="public-image-display-wrapper" style="position: relative; overflow: hidden; touch-action: none;">
+                    <div id="pdf-controls" class="hidden" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 8px; display: flex; gap: 15px; align-items: center;">
+                        <button id="btn-prev-page" class="btn small">◀</button>
+                        <span style="font-weight: bold;"><span id="page-num">1</span> / <span id="page-count">1</span></span>
+                        <button id="btn-next-page" class="btn small">▶</button>
+                    </div>
                     <button id="btn-open-public" class="btn small hidden" style="position: absolute; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">↗️ Abrir Aba</button>
                     <button id="btn-fullscreen-public" class="btn small hidden" style="position: absolute; top: 10px; right: 110px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">⛶ Expandir</button>
                     <div id="public-image-display" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
                         <p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>
-                        <img id="main-image" src="" alt="Cenário" class="hidden">
+                        <div id="panzoom-wrapper" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; transform-origin: center center;">
+                            <img id="main-image" src="" alt="Cenário" class="hidden" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                            <canvas id="pdf-canvas" class="hidden" style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -749,11 +762,43 @@ ul#players-list li .dm-badge {
 
     <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // --- PDF.js e Panzoom ---
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    let currentPdfDoc = null;
+    let currentPdfPage = 1;
+    let publicPanzoom = null;
+
     // --- Estado Local ---
     let currentUser = { nickname: '', isDM: false };
     
     // --- Estado da Sala ---
     let roomState = { code: '', players: [], logs: [], publicImage: '', publicImageType: 'img', lastRoll: null };
+
+    // --- Funções de Paginação PDF ---
+    window.renderPdfPage = function(pageNum) {
+        if(!currentPdfDoc) return;
+        currentPdfDoc.getPage(pageNum).then(function(page) {
+            const viewport = page.getViewport({scale: 2.0});
+            const canvas = document.getElementById('pdf-canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            page.render({ canvasContext: context, viewport: viewport });
+            document.getElementById('page-num').textContent = pageNum;
+        });
+    };
+
+    document.getElementById('btn-prev-page').addEventListener('click', () => {
+        if (currentPdfPage <= 1) return;
+        currentPdfPage--;
+        window.renderPdfPage(currentPdfPage);
+    });
+    
+    document.getElementById('btn-next-page').addEventListener('click', () => {
+        if (!currentPdfDoc || currentPdfPage >= currentPdfDoc.numPages) return;
+        currentPdfPage++;
+        window.renderPdfPage(currentPdfPage);
+    });
 
     // --- Variáveis de Conexão MQTT ---
     let mqttClient = null;
@@ -852,9 +897,15 @@ document.addEventListener('DOMContentLoaded', () => {
         publicDiceLog.scrollTop = publicDiceLog.scrollHeight;
         if(dmPublicDiceLog) dmPublicDiceLog.scrollTop = dmPublicDiceLog.scrollHeight;
 
+        // --- Renderização de PDF.js e Imagens com Panzoom ---
+        const mainImage = document.getElementById('main-image');
+        const pdfCanvas = document.getElementById('pdf-canvas');
+        const noImageText = document.getElementById('no-image-text');
+        const pdfControls = document.getElementById('pdf-controls');
+        const panzoomWrapper = document.getElementById('panzoom-wrapper');
+        
         if (roomState.publicImage) {
-            const container = document.getElementById('public-image-display');
-            container.innerHTML = '';
+            noImageText.classList.add('hidden');
             if(btnOpenPublic) btnOpenPublic.classList.remove('hidden');
             if(btnFullscreenPublic) btnFullscreenPublic.classList.remove('hidden');
             
@@ -865,34 +916,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 else document.exitFullscreen();
             };
 
-            let elem;
-            if (roomState.publicImageType === 'pdf') {
-                elem = document.createElement('iframe');
-                elem.src = roomState.publicImage;
-                elem.style.width = '100%';
-                elem.style.height = '100%';
-                elem.style.border = 'none';
-            } else {
-                elem = document.createElement('img');
-                elem.src = roomState.publicImage;
-                elem.style.maxWidth = '100%';
-                elem.style.maxHeight = '100%';
-                elem.style.objectFit = 'contain';
+            // Inicializa Panzoom se não existir
+            if (!publicPanzoom) {
+                publicPanzoom = Panzoom(panzoomWrapper, {
+                    maxScale: 10,
+                    minScale: 0.5,
+                    contain: 'outside'
+                });
+                const containerWrapper = document.getElementById('public-image-display-wrapper');
+                containerWrapper.addEventListener('wheel', publicPanzoom.zoomWithWheel);
             }
-            container.appendChild(elem);
+
+            // Somente recarrega se a imagem mudou
+            if (window.currentLoadedPublic !== roomState.publicImage) {
+                window.currentLoadedPublic = roomState.publicImage;
+                publicPanzoom.reset(); // Reseta zoom
+
+                if (roomState.publicImageType === 'pdf') {
+                    mainImage.classList.add('hidden');
+                    pdfCanvas.classList.remove('hidden');
+                    pdfControls.classList.remove('hidden');
+                    
+                    // Carregar PDF via PDF.js
+                    const loadingTask = pdfjsLib.getDocument(roomState.publicImage);
+                    loadingTask.promise.then(function(pdf) {
+                        currentPdfDoc = pdf;
+                        currentPdfPage = 1;
+                        document.getElementById('page-count').textContent = pdf.numPages;
+                        window.renderPdfPage(currentPdfPage);
+                    }).catch(err => {
+                        console.error("Erro PDF:", err);
+                        alert("Não foi possível ler este PDF diretamente na mesa. Use o botão de 'Abrir Aba'.");
+                    });
+                } else {
+                    pdfCanvas.classList.add('hidden');
+                    pdfControls.classList.add('hidden');
+                    mainImage.classList.remove('hidden');
+                    mainImage.src = roomState.publicImage;
+                }
+            }
             
             const dmContainer = document.getElementById('dm-public-preview-container');
             if (dmContainer) {
                 dmContainer.innerHTML = '<h4>Visão Atual:</h4>';
-                let dmElem = elem.cloneNode();
-                dmElem.className = 'preview-img';
-                dmElem.style.height = '150px';
-                dmContainer.appendChild(dmElem);
+                if (roomState.publicImageType === 'pdf') {
+                    dmContainer.innerHTML += '<p style="color:var(--accent);">[PDF Compartilhado Ativo]</p>';
+                } else {
+                    let dmElem = document.createElement('img');
+                    dmElem.src = roomState.publicImage;
+                    dmElem.className = 'preview-img';
+                    dmElem.style.height = '150px';
+                    dmContainer.appendChild(dmElem);
+                }
             }
         } else {
-            document.getElementById('public-image-display').innerHTML = '<p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>';
+            noImageText.classList.remove('hidden');
+            mainImage.classList.add('hidden');
+            pdfCanvas.classList.add('hidden');
+            pdfControls.classList.add('hidden');
             if(btnOpenPublic) btnOpenPublic.classList.add('hidden');
             if(btnFullscreenPublic) btnFullscreenPublic.classList.add('hidden');
+            window.currentLoadedPublic = null;
+            if (publicPanzoom) publicPanzoom.reset();
+            
             const dmContainer = document.getElementById('dm-public-preview-container');
             if (dmContainer) {
                 dmContainer.innerHTML = '<h4>Visão Atual:</h4><p class="help-text">Nenhum</p>';
