@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eros - RPG Virtual Tabletop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+:root {
+    --bg-color: #0b0c10;
+    --panel-bg: rgba(31, 40, 51, 0.6);
+    --panel-border: rgba(102, 252, 241, 0.2);
+    --text-primary: #c5c6c7;
+    --text-glow: #66fcf1;
+    --accent: #45a29e;
+    --danger: #ff4b4b;
+    --dm-color: #fca311;
+    --font-main: 'Outfit', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-main);
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image: radial-gradient(circle at top right, rgba(69, 162, 158, 0.15), transparent 40%),
+                      radial-gradient(circle at bottom left, rgba(31, 40, 51, 0.4), transparent 40%);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.screen {
+    display: none;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.screen.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Glassmorphism */
+.glass-panel {
+    background: var(--panel-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-inner {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 15px;
+}
+
+/* Typography */
+.glow-text {
+    color: var(--text-glow);
+    text-shadow: 0 0 10px rgba(102, 252, 241, 0.5);
+}
+
+h1 { font-size: 3rem; margin-bottom: 0.5rem; text-align: center; }
+h2 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-glow); border-bottom: 1px solid var(--panel-border); padding-bottom: 5px; }
+h3 { font-size: 1.2rem; margin-bottom: 0.8rem; color: var(--accent); }
+
+/* Login Screen */
+#login-screen {
+    justify-content: center;
+    align-items: center;
+}
+
+.login-panel {
+    padding: 40px;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.subtitle {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: 300;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group label {
+    font-size: 0.9rem;
+    color: #a0a0a0;
+}
+
+input[type="text"], textarea {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-family: var(--font-main);
+    font-size: 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: 100%;
+}
+
+input[type="text"]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--text-glow);
+    box-shadow: 0 0 8px rgba(102, 252, 241, 0.3);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--font-main);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn.primary {
+    background: var(--text-glow);
+    color: var(--bg-color);
+    box-shadow: 0 0 15px rgba(102, 252, 241, 0.4);
+}
+
+.btn.primary:hover {
+    background: #fff;
+    box-shadow: 0 0 20px rgba(102, 252, 241, 0.8);
+    transform: translateY(-2px);
+}
+
+.btn.secondary {
+    background: transparent;
+    border: 1px solid var(--text-glow);
+    color: var(--text-glow);
+}
+
+.btn.secondary:hover {
+    background: rgba(102, 252, 241, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn.action {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.btn.dm-btn {
+    background: var(--dm-color);
+    color: #000;
+    box-shadow: 0 0 15px rgba(252, 163, 17, 0.4);
+}
+
+.btn.small {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+}
+
+.outline-btn {
+    background: transparent;
+    border: 1px dashed var(--accent);
+    color: var(--text-primary);
+}
+.outline-btn:hover {
+    background: rgba(69, 162, 158, 0.2);
+}
+
+/* Room Screen Layout */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: var(--panel-bg);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--panel-border);
+}
+
+.room-info {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.room-grid {
+    display: grid;
+    grid-template-columns: 250px 1fr 1fr;
+    grid-template-rows: auto auto 1fr;
+    gap: 20px;
+    flex-grow: 1;
+}
+
+.panel {
+    background: var(--panel-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Grid Areas placement */
+.players-panel { grid-column: 1 / 2; grid-row: 1 / 3; }
+.dice-panel { grid-column: 2 / 3; grid-row: 1 / 2; }
+.results-panel { grid-column: 2 / 3; grid-row: 2 / 3; }
+.notes-panel { grid-column: 1 / 3; grid-row: 3 / 4; }
+.image-panel { grid-column: 3 / 4; grid-row: 1 / 4; }
+
+/* Panel contents */
+ul#players-list {
+    list-style: none;
+}
+ul#players-list li {
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.3);
+    margin-bottom: 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+ul#players-list li .dm-badge {
+    background: var(--dm-color);
+    color: #000;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.dice-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.dice-btn, .private-dice-btn {
+    background: rgba(69, 162, 158, 0.1);
+    border: 1px solid var(--accent);
+    color: var(--text-primary);
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    flex: 1 1 calc(25% - 10px);
+    text-align: center;
+    transition: all 0.2s;
+}
+.dice-btn:hover, .private-dice-btn:hover {
+    background: var(--accent);
+    color: #000;
+    transform: scale(1.05);
+}
+
+.log-box {
+    background: rgba(0,0,0,0.5);
+    border-radius: 8px;
+    padding: 15px;
+    flex-grow: 1;
+    overflow-y: auto;
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.log-entry {
+    font-size: 0.95rem;
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    animation: fadeIn 0.3s ease;
+}
+.log-entry strong { color: var(--text-glow); }
+
+.notes-panel textarea {
+    flex-grow: 1;
+    min-height: 150px;
+}
+
+.image-container {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+.image-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.bottom-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+}
+
+/* Modal DM */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+.modal-content {
+    width: 100%;
+    max-width: 1000px;
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--panel-border);
+}
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 2rem;
+    cursor: pointer;
+}
+.close-btn:hover { color: var(--danger); }
+
+.tabs {
+    display: flex;
+    background: rgba(0,0,0,0.2);
+}
+.tab-btn {
+    flex: 1;
+    padding: 15px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.tab-btn.active {
+    color: var(--dm-color);
+    border-bottom-color: var(--dm-color);
+    background: rgba(252, 163, 17, 0.1);
+}
+
+.tab-content {
+    padding: 20px;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.tab-pane {
+    display: none;
+    height: 100%;
+}
+.tab-pane.active {
+    display: block;
+}
+
+/* DM Notes Layout */
+.dm-notes-layout {
+    display: flex;
+    gap: 20px;
+    height: 100%;
+}
+.dm-textarea {
+    flex: 2;
+    height: 100%;
+}
+.private-dice-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.log-box.small { max-height: none; flex-grow: 1; margin-top: 15px;}
+
+/* Sheets Layout */
+.sheets-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.sheet-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.sheet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sheet-card {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 15px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+}
+.btn-remove-sheet {
+    position: absolute;
+    top: 5px; right: 5px;
+    background: transparent;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+.sheet-input {
+    background: rgba(255,255,255,0.05);
+    border: none;
+    padding: 8px;
+}
+.sheet-input.bold { font-weight: bold; font-size: 1.1rem; color: var(--dm-color); }
+
+/* Images Layout */
+.images-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.image-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.help-text { font-size: 0.85rem; color: #888; }
+.input-flex { display: flex; gap: 10px; }
+.input-flex input { flex-grow: 1; }
+.preview-img { max-width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid var(--accent); }
+.image-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.private-img-item { width: 100%; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media screen and (max-width: 768px) {
+    .room-grid {
+        display: flex;
+        flex-direction: column;
+    }
+    .panel {
+        margin-bottom: 10px;
+    }
+}
+
+/* Toasts / Notificações */
+#toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+.toast {
+    background: rgba(11, 12, 16, 0.95);
+    border-left: 4px solid var(--text-glow);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    animation: slideIn 0.3s ease-out forwards, fadeOut 0.5s ease-in 4s forwards;
+    max-width: 300px;
+    font-size: 0.95rem;
+}
+.toast strong { color: var(--text-glow); }
+@keyframes slideIn {
+    from { transform: translateX(120%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+    </style>
+</head>
+<body>
+    <div id="toast-container"></div>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="glass-panel login-panel">
+            <h1 class="glow-text">Eros</h1>
+            <p class="subtitle">Sua Mesa de RPG Virtual</p>
+            
+            <div class="input-group">
+                <label for="nickname">Apelido (Obrigatório)</label>
+                <input type="text" id="nickname" placeholder="Seu nome de herói...">
+            </div>
+
+            <div class="input-group">
+                <label for="room-code-input">Código da Sala (para entrar)</label>
+                <input type="text" id="room-code-input" placeholder="Ex: AX5F9">
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-create-room" class="btn primary">Criar Sala</button>
+                <button id="btn-join-room" class="btn secondary">Juntar-se à Sala</button>
+            </div>
+            <div id="login-error" class="error-msg hidden" style="color: #ff4b4b; margin-top: 10px; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <!-- Room Screen -->
+    <div id="room-screen" class="screen">
+        <div class="top-bar">
+            <div class="room-info">
+                <span class="label">Sala:</span>
+                <span id="display-room-code" class="glow-text"></span>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div id="user-info" class="user-info"></div>
+                <button id="btn-leave-room" class="btn small outline-btn" style="border-color: var(--danger); color: var(--danger);">Sair da Sala</button>
+            </div>
+        </div>
+
+        <div class="room-grid">
+            <!-- Quadro 1: Jogadores -->
+            <div class="panel players-panel">
+                <h2>Jogadores</h2>
+                <ul id="players-list"></ul>
+            </div>
+
+            <!-- Quadro 2: Dados -->
+            <div class="panel dice-panel">
+                <h2>Dados</h2>
+                <div class="dice-buttons">
+                    <button class="dice-btn" data-sides="4">1d4</button>
+                    <button class="dice-btn" data-sides="6">1d6</button>
+                    <button class="dice-btn" data-sides="8">1d8</button>
+                    <button class="dice-btn" data-sides="10">1d10</button>
+                    <button class="dice-btn" data-sides="12">1d12</button>
+                    <button class="dice-btn" data-sides="20">1d20</button>
+                    <button class="dice-btn" data-sides="100">1d100</button>
+                </div>
+            </div>
+
+            <!-- Quadro 3: Resultados -->
+            <div class="panel results-panel">
+                <h2>Resultados</h2>
+                <div id="dice-results" class="log-box"></div>
+            </div>
+
+            <!-- Quadro 4: Anotações -->
+            <div class="panel notes-panel">
+                <h2>Anotações</h2>
+                <textarea placeholder="Suas anotações secretas..."></textarea>
+            </div>
+
+            <!-- Quadro 5: Imagem Principal -->
+            <div class="panel image-panel">
+                <h2>Cenário / Imagem</h2>
+                <div class="image-container" id="public-image-display-wrapper" style="position: relative;">
+                    <button id="btn-open-public" class="btn small hidden" style="position: absolute; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">↗️ Abrir Aba</button>
+                    <button id="btn-fullscreen-public" class="btn small hidden" style="position: absolute; top: 10px; right: 110px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">⛶ Expandir</button>
+                    <div id="public-image-display" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                        <p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>
+                        <img id="main-image" src="" alt="Cenário" class="hidden">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-actions">
+            <button id="btn-become-dm" class="btn action">Virar Mestre</button>
+            <button id="btn-dm-screen" class="btn dm-btn hidden">Escudo do Mestre</button>
+        </div>
+    </div>
+
+    <!-- DM Screen Modal -->
+    <div id="dm-modal" class="modal hidden">
+        <div class="modal-content glass-panel dm-panel">
+            <div class="modal-header">
+                <h2 class="glow-text">Escudo do Mestre</h2>
+                <button id="btn-close-dm" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" data-target="dm-notes">Anotações</button>
+                <button class="tab-btn" data-target="dm-sheets">Fichas</button>
+                <button class="tab-btn" data-target="dm-images">Imagens</button>
+            </div>
+
+            <div class="tab-content">
+                <!-- Aba Anotações -->
+                <div id="dm-notes" class="tab-pane active">
+                    <div class="dm-notes-layout">
+                        <textarea placeholder="Anotações exclusivas da campanha..." class="dm-textarea"></textarea>
+                        <div class="private-dice-area glass-panel-inner">
+                            <h3>Rolagem Privada</h3>
+                            <div class="dice-buttons small">
+                                <button class="private-dice-btn" data-sides="4">d4</button>
+                                <button class="private-dice-btn" data-sides="6">d6</button>
+                                <button class="private-dice-btn" data-sides="8">d8</button>
+                                <button class="private-dice-btn" data-sides="10">d10</button>
+                                <button class="private-dice-btn" data-sides="12">d12</button>
+                                <button class="private-dice-btn" data-sides="20">d20</button>
+                                <button class="private-dice-btn" data-sides="100">d100</button>
+                            </div>
+                            <div id="private-dice-results" class="log-box small" style="margin-bottom: 15px; max-height: 120px;"></div>
+                            <h3 style="margin-top: 10px;">Mesa (Público)</h3>
+                            <div id="dm-public-dice-results" class="log-box small" style="max-height: 120px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba Fichas -->
+                <div id="dm-sheets" class="tab-pane">
+                    <div class="sheets-layout">
+                        <div class="sheet-section glass-panel-inner">
+                            <h3>Fichas de Monstros</h3>
+                            <div id="monsters-list" class="sheet-list"></div>
+                            <button id="btn-add-monster" class="btn small outline-btn">+ Adicionar Monstro</button>
+                        </div>
+                        <div class="sheet-section glass-panel-inner">
+                            <h3>Fichas de NPC</h3>
+                            <div id="npcs-list" class="sheet-list"></div>
+                            <button id="btn-add-npc" class="btn small outline-btn">+ Adicionar NPC</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba Imagens -->
+                <div id="dm-images" class="tab-pane">
+                    <div class="images-layout">
+                        <div class="image-box glass-panel-inner">
+                            <h3>Imagens / PDFs Privados</h3>
+                            <p class="help-text">Apenas você vê. Cole URLs ou envie um arquivo.</p>
+                            <div class="input-flex" style="margin-bottom: 10px;">
+                                <input type="file" id="private-file-upload" accept="image/*,application/pdf" style="width: 100%; color: var(--text-primary);">
+                            </div>
+                            <div class="input-flex">
+                                <select id="private-img-type" class="btn small" style="background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                                    <option value="img">Imagem</option>
+                                    <option value="pdf">PDF / Site</option>
+                                </select>
+                                <input type="text" id="private-img-url" placeholder="URL (ex: https://...)">
+                                <button id="btn-add-private-img" class="btn small">Salvar</button>
+                            </div>
+                            <div id="private-images-list" class="image-grid"></div>
+                        </div>
+                        <div class="image-box glass-panel-inner">
+                            <h3>Imagens / PDFs Públicos</h3>
+                            <p class="help-text">Atualiza a visão de todos os jogadores (Quadro 5).</p>
+                            <div class="input-flex" style="margin-bottom: 10px;">
+                                <input type="file" id="public-file-upload" accept="image/*,application/pdf" style="width: 100%; color: var(--text-primary);">
+                            </div>
+                            <div class="input-flex">
+                                <select id="public-img-type" class="btn small" style="background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                                    <option value="img">Imagem</option>
+                                    <option value="pdf">PDF / Site</option>
+                                </select>
+                                <input type="text" id="public-img-url" placeholder="Ou cole a URL aqui...">
+                                <button id="btn-set-public-img" class="btn primary small">Compartilhar</button>
+                            </div>
+                            <div class="current-public" id="dm-public-preview-container">
+                                <h4>Visão Atual:</h4>
+                                <img id="dm-current-public-img" src="" alt="Nenhuma imagem enviada" class="hidden preview-img">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cropper Modal -->
+    <div id="cropper-modal" class="modal hidden" style="z-index: 200;">
+        <div class="modal-content glass-panel" style="max-width: 800px; height: 80vh;">
+            <div class="modal-header">
+                <h2 class="glow-text">Recortar Imagem Pública</h2>
+                <button id="btn-close-cropper" class="close-btn">&times;</button>
+            </div>
+            <div style="flex-grow: 1; padding: 20px; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.5); overflow: hidden;">
+                <img id="cropper-image" src="" style="max-width: 100%; max-height: 100%; display: block;">
+            </div>
+            <div style="padding: 20px; display: flex; justify-content: flex-end; gap: 15px; border-top: 1px solid var(--panel-border);">
+                <button id="btn-cancel-cropper" class="btn secondary">Cancelar</button>
+                <button id="btn-send-cropped" class="btn primary">Recortar e Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Templates -->
+    <template id="monster-template">
+        <div class="sheet-card">
+            <button class="btn-remove-sheet">&times;</button>
+            <input type="text" placeholder="Nome:" class="sheet-input bold">
+            <input type="text" placeholder="Dados de Dano (ex: 2d6+4):" class="sheet-input">
+            <textarea placeholder="Observação..." class="sheet-input"></textarea>
+        </div>
+    </template>
+    <template id="npc-template">
+        <div class="sheet-card">
+            <button class="btn-remove-sheet">&times;</button>
+            <input type="text" placeholder="Nome:" class="sheet-input bold">
+            <textarea placeholder="Observação..." class="sheet-input"></textarea>
+        </div>
+    </template>
+
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Estado Local ---
+    let currentUser = { nickname: '', isDM: false };
+    
+    // --- Estado da Sala ---
+    let roomState = { code: '', players: [], logs: [], publicImage: '', publicImageType: 'img', lastRoll: null };
+
+    // --- Variáveis de Conexão MQTT ---
+    let mqttClient = null;
+    let isHost = false;
+    let myClientId = 'client_' + Math.random().toString(16).substr(2, 8);
+    let topicState = '';
+    let topicActions = '';
+
+    // --- Elementos DOM ---
+    const screens = { login: document.getElementById('login-screen'), room: document.getElementById('room-screen') };
+    const nicknameInput = document.getElementById('nickname');
+    const roomCodeInput = document.getElementById('room-code-input');
+    const btnCreateRoom = document.getElementById('btn-create-room');
+    const btnJoinRoom = document.getElementById('btn-join-room');
+    const loginError = document.getElementById('login-error');
+    
+    const displayRoomCode = document.getElementById('display-room-code');
+    const displayUserInfo = document.getElementById('user-info');
+    const playersList = document.getElementById('players-list');
+    const publicDiceLog = document.getElementById('dice-results');
+    const dmPublicDiceLog = document.getElementById('dm-public-dice-results');
+    
+    const btnBecomeDM = document.getElementById('btn-become-dm');
+    const btnDMScreen = document.getElementById('btn-dm-screen');
+    const dmModal = document.getElementById('dm-modal');
+    const btnCloseDM = document.getElementById('btn-close-dm');
+    const btnOpenPublic = document.getElementById('btn-open-public');
+    const btnFullscreenPublic = document.getElementById('btn-fullscreen-public');
+
+    // --- Funções Auxiliares ---
+    function switchScreen(screenName) {
+        Object.values(screens).forEach(s => s.classList.remove('active'));
+        screens[screenName].classList.add('active');
+    }
+
+    function generateRoomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for(let i=0; i<5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        return code;
+    }
+
+    function showToast(htmlContent) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = htmlContent;
+        container.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) toast.remove();
+        }, 4500);
+    }
+
+    // --- Renderização da Sala ---
+    function renderRoom() {
+        displayRoomCode.textContent = roomState.code;
+        displayUserInfo.innerHTML = `Logado como: <strong>${currentUser.nickname}</strong>`;
+
+        playersList.innerHTML = '';
+        roomState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = player.name;
+            if (player.isDM) {
+                const badge = document.createElement('span');
+                badge.className = 'dm-badge';
+                badge.textContent = 'MESTRE';
+                li.appendChild(badge);
+                if(player.name === currentUser.nickname) {
+                    currentUser.isDM = true;
+                    btnBecomeDM.classList.add('hidden');
+                    btnDMScreen.classList.remove('hidden');
+                }
+            }
+            playersList.appendChild(li);
+        });
+
+        const hasDM = roomState.players.some(p => p.isDM);
+        if (hasDM && !currentUser.isDM) btnBecomeDM.classList.add('hidden');
+        else if (!hasDM) btnBecomeDM.classList.remove('hidden');
+
+        publicDiceLog.innerHTML = '';
+        if(dmPublicDiceLog) dmPublicDiceLog.innerHTML = '';
+        roomState.logs.forEach(logText => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = logText;
+            publicDiceLog.appendChild(entry);
+            if(dmPublicDiceLog) {
+                const dmEntry = document.createElement('div');
+                dmEntry.className = 'log-entry';
+                dmEntry.innerHTML = logText;
+                dmPublicDiceLog.appendChild(dmEntry);
+            }
+        });
+        publicDiceLog.scrollTop = publicDiceLog.scrollHeight;
+        if(dmPublicDiceLog) dmPublicDiceLog.scrollTop = dmPublicDiceLog.scrollHeight;
+
+        if (roomState.publicImage) {
+            const container = document.getElementById('public-image-display');
+            container.innerHTML = '';
+            if(btnOpenPublic) btnOpenPublic.classList.remove('hidden');
+            if(btnFullscreenPublic) btnFullscreenPublic.classList.remove('hidden');
+            
+            if(btnOpenPublic) btnOpenPublic.onclick = () => window.open(roomState.publicImage, '_blank');
+            if(btnFullscreenPublic) btnFullscreenPublic.onclick = () => {
+                const wrapper = document.getElementById('public-image-display-wrapper');
+                if (!document.fullscreenElement) wrapper.requestFullscreen().catch(err => alert("Erro ao expandir: " + err.message));
+                else document.exitFullscreen();
+            };
+
+            let elem;
+            if (roomState.publicImageType === 'pdf') {
+                elem = document.createElement('iframe');
+                elem.src = roomState.publicImage;
+                elem.style.width = '100%';
+                elem.style.height = '100%';
+                elem.style.border = 'none';
+            } else {
+                elem = document.createElement('img');
+                elem.src = roomState.publicImage;
+                elem.style.maxWidth = '100%';
+                elem.style.maxHeight = '100%';
+                elem.style.objectFit = 'contain';
+            }
+            container.appendChild(elem);
+            
+            const dmContainer = document.getElementById('dm-public-preview-container');
+            if (dmContainer) {
+                dmContainer.innerHTML = '<h4>Visão Atual:</h4>';
+                let dmElem = elem.cloneNode();
+                dmElem.className = 'preview-img';
+                dmElem.style.height = '150px';
+                dmContainer.appendChild(dmElem);
+            }
+        } else {
+            document.getElementById('public-image-display').innerHTML = '<p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>';
+            if(btnOpenPublic) btnOpenPublic.classList.add('hidden');
+            if(btnFullscreenPublic) btnFullscreenPublic.classList.add('hidden');
+            const dmContainer = document.getElementById('dm-public-preview-container');
+            if (dmContainer) {
+                dmContainer.innerHTML = '<h4>Visão Atual:</h4><p class="help-text">Nenhum</p>';
+            }
+        }
+    }
+
+    // ==========================================
+    // LÓGICA DE REDE: MQTT (MUITO MAIS COMPATÍVEL)
+    // ==========================================
+    function connectMQTT(code, isCreating) {
+        // Conecta a um broker público que usa WebSockets seguros (wss)
+        mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+        
+        topicState = `eros_rpg_app/${code}/state`;
+        topicActions = `eros_rpg_app/${code}/actions`;
+
+        mqttClient.on('connect', () => {
+            if (isCreating) {
+                // Configuração do HOST
+                isHost = true;
+                roomState.code = code;
+                roomState.players = [{ name: currentUser.nickname, isDM: false }];
+                roomState.logs = [`<em>Sala criada por ${currentUser.nickname}</em>`];
+                
+                mqttClient.subscribe(topicActions); // Ouve as ações dos clientes
+                publishState(); // Publica o estado inicial retido na rede
+                
+                btnCreateRoom.textContent = "Criar Sala";
+                btnCreateRoom.disabled = false;
+                switchScreen('room');
+                renderRoom();
+            } else {
+                // Configuração do CLIENT (Juntar-se)
+                isHost = false;
+                mqttClient.subscribe(topicState); // Ouve as atualizações de estado do host
+                
+                // Avisa o host que queremos entrar
+                sendAction({ type: 'JOIN', nickname: currentUser.nickname });
+            }
+        });
+
+        mqttClient.on('message', (topic, message) => {
+            const data = JSON.parse(message.toString());
+            
+            if (isHost && topic === topicActions) {
+                handleClientAction(data);
+            } 
+            else if (!isHost && topic === topicState) {
+                // Recebendo atualização de estado do Host
+                const prevRollId = roomState.lastRoll ? roomState.lastRoll.id : null;
+                roomState = data;
+                
+                if (roomState.lastRoll && roomState.lastRoll.id !== prevRollId) {
+                    showToast(roomState.lastRoll.msg);
+                }
+                
+                // Tratando erros retornados pelo host no estado para este usuário
+                if(roomState.errorFor === currentUser.nickname) {
+                    loginError.textContent = roomState.errorMessage;
+                    loginError.classList.remove('hidden');
+                    btnJoinRoom.textContent = "Juntar-se à Sala";
+                    btnJoinRoom.disabled = false;
+                    mqttClient.end();
+                    return;
+                }
+
+                if (screens.login.classList.contains('active')) {
+                    switchScreen('room');
+                }
+                renderRoom();
+            }
+        });
+
+        mqttClient.on('error', (error) => {
+            loginError.textContent = "Erro na rede. Verifique a internet e tente novamente.";
+            loginError.classList.remove('hidden');
+            btnJoinRoom.textContent = "Juntar-se à Sala";
+            btnJoinRoom.disabled = false;
+            btnCreateRoom.textContent = "Criar Sala";
+            btnCreateRoom.disabled = false;
+        });
+    }
+
+    function publishState() {
+        if (!isHost) return;
+        // Envia o estado para todos com retain=true (para que quem acabe de se conectar receba o último estado)
+        mqttClient.publish(topicState, JSON.stringify(roomState), { retain: true });
+        renderRoom(); // Atualiza a tela do host
+    }
+
+    function handleClientAction(data) {
+        if (!isHost) return;
+
+        if (data.type === 'JOIN') {
+            const nameExists = roomState.players.some(p => p.name.toLowerCase() === data.nickname.toLowerCase());
+            if (nameExists) {
+                // Envia um erro específico no state para o usuário ser expulso
+                roomState.errorFor = data.nickname;
+                roomState.errorMessage = 'Este apelido já está em uso nesta sala.';
+                publishState();
+                
+                // Limpa o erro logo depois
+                setTimeout(() => {
+                    roomState.errorFor = null;
+                    publishState();
+                }, 1000);
+                return;
+            }
+            
+            roomState.players.push({ name: data.nickname, isDM: false });
+            roomState.logs.push(`<em>${data.nickname} entrou na sala!</em>`);
+            publishState();
+        }
+
+        if (data.type === 'LEAVE') {
+            roomState.players = roomState.players.filter(p => p.name !== data.nickname);
+            roomState.logs.push(`<em>${data.nickname} saiu da sala.</em>`);
+            publishState();
+        }
+
+        if (data.type === 'ROLL_DICE') {
+            const result = Math.floor(Math.random() * data.sides) + 1;
+            const logMsg = `<strong>${data.nickname}</strong> rolou 1d${data.sides} <br> Resultado: <strong style="font-size: 1.2em; color: var(--accent);">${result}</strong>`;
+            roomState.logs.push(logMsg);
+            roomState.lastRoll = { msg: logMsg, id: Date.now() };
+            showToast(logMsg);
+            publishState();
+        }
+
+        if (data.type === 'BECOME_DM') {
+            const hasDM = roomState.players.some(p => p.isDM);
+            if (!hasDM) {
+                const p = roomState.players.find(p => p.name === data.nickname);
+                if (p) p.isDM = true;
+                roomState.logs.push(`<em>${data.nickname} assumiu o Escudo do Mestre!</em>`);
+                publishState();
+            }
+        }
+
+        if (data.type === 'UPDATE_IMAGE') {
+            const p = roomState.players.find(p => p.name === data.nickname);
+            if (p && p.isDM) {
+                roomState.publicImage = data.url;
+                roomState.publicImageType = data.imgType || 'img';
+                if(data.url) roomState.logs.push(`<em>O Mestre alterou a imagem/cenário.</em>`);
+                publishState();
+            }
+        }
+    }
+
+    function sendAction(actionObj) {
+        actionObj.nickname = currentUser.nickname;
+        if (isHost) {
+            handleClientAction(actionObj);
+        } else {
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(topicActions, JSON.stringify(actionObj));
+            }
+        }
+    }
+
+    // --- Lógica de Interface Básica ---
+    function handleLogin(isCreating) {
+        const nickname = nicknameInput.value.trim();
+        let code = roomCodeInput.value.trim().toUpperCase();
+
+        if (!nickname) {
+            loginError.textContent = "Por favor, digite seu apelido.";
+            loginError.classList.remove('hidden'); return;
+        }
+
+        loginError.classList.add('hidden');
+        currentUser.nickname = nickname;
+
+        if (isCreating) {
+            btnCreateRoom.textContent = "Criando...";
+            btnCreateRoom.disabled = true;
+            connectMQTT(generateRoomCode(), true);
+        } else {
+            if (!code) {
+                loginError.textContent = "Para entrar, digite o código da sala.";
+                loginError.classList.remove('hidden'); return;
+            }
+            btnJoinRoom.textContent = "Conectando...";
+            btnJoinRoom.disabled = true;
+            connectMQTT(code, false);
+        }
+    }
+
+    btnCreateRoom.addEventListener('click', () => handleLogin(true));
+    btnJoinRoom.addEventListener('click', () => handleLogin(false));
+
+    // Sair da Sala
+    document.getElementById('btn-leave-room').addEventListener('click', () => {
+        if (mqttClient) {
+            if (isHost) {
+                mqttClient.publish(topicState, '', { retain: true }); // Limpa a sala para futuros entrantes
+            } else {
+                sendAction({ type: 'LEAVE' });
+            }
+            mqttClient.end();
+            mqttClient = null;
+        }
+        
+        // Reset Local State
+        currentUser = { nickname: '', isDM: false };
+        roomState = { code: '', players: [], logs: [], publicImage: '', publicImageType: 'img' };
+        
+        // Reset UI
+        document.getElementById('nickname').value = '';
+        document.getElementById('room-code-input').value = '';
+        btnBecomeDM.classList.remove('hidden');
+        btnDMScreen.classList.add('hidden');
+        
+        switchScreen('login');
+    });
+
+    // Desconecta se fechar a aba e limpa a sala
+    window.addEventListener('beforeunload', () => {
+        if(isHost && mqttClient) {
+            mqttClient.publish(topicState, '', { retain: true }); 
+        }
+        if(mqttClient) mqttClient.end();
+    });
+
+    // --- Interações da Sala ---
+    // Dados Públicos
+    document.querySelectorAll('.dice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sides = parseInt(btn.getAttribute('data-sides'));
+            sendAction({ type: 'ROLL_DICE', sides: sides });
+        });
+    });
+
+    // Dados Privados (Apenas no PC de quem clicar, não vai pra rede)
+    document.querySelectorAll('.private-dice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sides = parseInt(btn.getAttribute('data-sides'));
+            const result = Math.floor(Math.random() * sides) + 1;
+            const privateDiceLog = document.getElementById('private-dice-results');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `Rolagem Oculta (1d${sides}) <br>Resultado: <strong style="color: var(--danger);">${result}</strong>`;
+            privateDiceLog.appendChild(entry);
+            privateDiceLog.scrollTop = privateDiceLog.scrollHeight;
+        });
+    });
+
+    btnBecomeDM.addEventListener('click', () => {
+        sendAction({ type: 'BECOME_DM' });
+    });
+
+    const btnSetPublicImg = document.getElementById('btn-set-public-img');
+    const publicImgUrlInput = document.getElementById('public-img-url');
+    const publicImgTypeSelect = document.getElementById('public-img-type');
+    
+    btnSetPublicImg.addEventListener('click', () => {
+        const url = publicImgUrlInput.value.trim();
+        sendAction({ type: 'UPDATE_IMAGE', url: url, imgType: publicImgTypeSelect.value });
+        publicImgUrlInput.value = '';
+    });
+
+    // Modais e Abas visuais
+    btnDMScreen.addEventListener('click', () => dmModal.classList.remove('hidden'));
+    btnCloseDM.addEventListener('click', () => dmModal.classList.add('hidden'));
+    window.addEventListener('click', (e) => { if (e.target === dmModal) dmModal.classList.add('hidden'); });
+
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanes.forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.getAttribute('data-target')).classList.add('active');
+        });
+    });
+
+    // Fichas Privadas do Mestre
+    const btnAddMonster = document.getElementById('btn-add-monster');
+    const btnAddNpc = document.getElementById('btn-add-npc');
+    const monsterTemplate = document.getElementById('monster-template');
+    const npcTemplate = document.getElementById('npc-template');
+    
+    function createSheet(template, container) {
+        const clone = template.content.cloneNode(true);
+        const card = clone.querySelector('.sheet-card');
+        clone.querySelector('.btn-remove-sheet').addEventListener('click', () => card.remove());
+        container.appendChild(clone);
+    }
+    btnAddMonster.addEventListener('click', () => createSheet(monsterTemplate, document.getElementById('monsters-list')));
+    btnAddNpc.addEventListener('click', () => createSheet(npcTemplate, document.getElementById('npcs-list')));
+
+    // Imagens e PDFs Privados
+    const privateImgUrlInput = document.getElementById('private-img-url');
+    const privateImgTypeSelect = document.getElementById('private-img-type');
+    
+    function addPrivateMedia(url, isPdf) {
+        let elem;
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+
+        if (isPdf) {
+            elem = document.createElement('iframe');
+            elem.src = url;
+            elem.className = 'private-img-item';
+            elem.style.height = '300px';
+            elem.style.border = '1px solid var(--accent)';
+        } else {
+            elem = document.createElement('img');
+            elem.src = url;
+            elem.className = 'private-img-item';
+            elem.onerror = () => { alert("Erro ao carregar imagem privada."); wrapper.remove(); };
+        }
+        
+        const fsBtn = document.createElement('button');
+        fsBtn.innerHTML = '⛶';
+        fsBtn.className = 'btn-remove-sheet';
+        fsBtn.style.zIndex = '10';
+        fsBtn.style.right = '40px';
+        fsBtn.style.color = 'var(--text-glow)';
+        fsBtn.style.fontSize = '1.2rem';
+        fsBtn.onclick = () => {
+            if (!document.fullscreenElement) elem.requestFullscreen().catch(() => alert("Erro ao expandir."));
+            else document.exitFullscreen();
+        };
+
+        const removeBtn = document.createElement('button');
+        removeBtn.innerHTML = '&times;';
+        removeBtn.className = 'btn-remove-sheet';
+        removeBtn.style.zIndex = '10';
+        removeBtn.onclick = () => wrapper.remove();
+        
+        wrapper.appendChild(fsBtn);
+        wrapper.appendChild(removeBtn);
+        wrapper.appendChild(elem);
+        
+        document.getElementById('private-images-list').appendChild(wrapper);
+    }
+
+    document.getElementById('btn-add-private-img').addEventListener('click', () => {
+        const url = privateImgUrlInput.value.trim();
+        if (url) {
+            addPrivateMedia(url, privateImgTypeSelect.value === 'pdf');
+            privateImgUrlInput.value = '';
+        }
+    });
+
+    const privateFileUpload = document.getElementById('private-file-upload');
+    if (privateFileUpload) {
+        privateFileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            addPrivateMedia(url, file.type === 'application/pdf');
+            privateFileUpload.value = '';
+        });
+    }
+
+    // Lógica do Cropper e Upload Público
+    let cropper = null;
+    const cropperModal = document.getElementById('cropper-modal');
+    const cropperImage = document.getElementById('cropper-image');
+    const btnCloseCropper = document.getElementById('btn-close-cropper');
+    const btnCancelCropper = document.getElementById('btn-cancel-cropper');
+    const btnSendCropped = document.getElementById('btn-send-cropped');
+    const publicFileUpload = document.getElementById('public-file-upload');
+
+    function closeCropper() {
+        cropperModal.classList.add('hidden');
+        if (cropper) { cropper.destroy(); cropper = null; }
+        if (publicFileUpload) publicFileUpload.value = '';
+    }
+
+    if (btnCloseCropper) btnCloseCropper.addEventListener('click', closeCropper);
+    if (btnCancelCropper) btnCancelCropper.addEventListener('click', closeCropper);
+
+    if (btnSendCropped) btnSendCropped.addEventListener('click', () => {
+        if (!cropper) return;
+        const canvas = cropper.getCroppedCanvas({ maxWidth: 1024, maxHeight: 1024 });
+        if (!canvas) return;
+        
+        const base64Img = canvas.toDataURL('image/jpeg', 0.8);
+        sendAction({ type: 'UPDATE_IMAGE', url: base64Img, imgType: 'img' });
+        closeCropper();
+    });
+
+    if (publicFileUpload) {
+        publicFileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const isPdf = file.type === 'application/pdf';
+            if (isPdf) {
+                // Verificar tamanho (< 250KB) para PDF
+                if (file.size > 250000) {
+                    alert('Este PDF é muito grande (maior que 250KB) para a rede pública gratuita. Envie um PDF mais leve ou use o campo de Link (URL).');
+                    publicFileUpload.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    sendAction({ type: 'UPDATE_IMAGE', url: evt.target.result, imgType: 'pdf' });
+                    publicFileUpload.value = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // Imagem -> Abrir Cropper
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    cropperImage.src = evt.target.result;
+                    cropperModal.classList.remove('hidden');
+                    
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(cropperImage, {
+                        viewMode: 2,
+                        background: false
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+});
+    </script>
+</body>
+</html>

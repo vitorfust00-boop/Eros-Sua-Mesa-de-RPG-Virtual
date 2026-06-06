@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eros - RPG Virtual Tabletop</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- MQTT.js para conexão Real-Time super compatível via Broker Público -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="glass-panel login-panel">
+            <h1 class="glow-text">Eros</h1>
+            <p class="subtitle">Sua Mesa de RPG Virtual</p>
+            
+            <div class="input-group">
+                <label for="nickname">Apelido (Obrigatório)</label>
+                <input type="text" id="nickname" placeholder="Seu nome de herói...">
+            </div>
+
+            <div class="input-group">
+                <label for="room-code-input">Código da Sala (para entrar)</label>
+                <input type="text" id="room-code-input" placeholder="Ex: AX5F9">
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-create-room" class="btn primary">Criar Sala</button>
+                <button id="btn-join-room" class="btn secondary">Juntar-se à Sala</button>
+            </div>
+            <div id="login-error" class="error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Room Screen -->
+    <div id="room-screen" class="screen">
+        <div class="top-bar">
+            <div class="room-info">
+                <span class="label">Sala:</span>
+                <span id="display-room-code" class="glow-text"></span>
+            </div>
+            <div id="user-info" class="user-info"></div>
+        </div>
+
+        <div class="room-grid">
+            <!-- Quadro 1: Jogadores -->
+            <div class="panel players-panel">
+                <h2>Jogadores</h2>
+                <ul id="players-list"></ul>
+            </div>
+
+            <!-- Quadro 2: Dados -->
+            <div class="panel dice-panel">
+                <h2>Dados</h2>
+                <div class="dice-buttons">
+                    <button class="dice-btn" data-sides="4">1d4</button>
+                    <button class="dice-btn" data-sides="6">1d6</button>
+                    <button class="dice-btn" data-sides="8">1d8</button>
+                    <button class="dice-btn" data-sides="10">1d10</button>
+                    <button class="dice-btn" data-sides="12">1d12</button>
+                    <button class="dice-btn" data-sides="20">1d20</button>
+                    <button class="dice-btn" data-sides="100">1d100</button>
+                </div>
+            </div>
+
+            <!-- Quadro 3: Resultados -->
+            <div class="panel results-panel">
+                <h2>Resultados</h2>
+                <div id="dice-results" class="log-box"></div>
+            </div>
+
+            <!-- Quadro 4: Anotações -->
+            <div class="panel notes-panel">
+                <h2>Anotações</h2>
+                <textarea placeholder="Suas anotações secretas..."></textarea>
+            </div>
+
+            <!-- Quadro 5: Imagem Principal -->
+            <div class="panel image-panel">
+                <h2>Cenário / Imagem</h2>
+                <div class="image-container" id="public-image-display">
+                    <p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>
+                    <img id="main-image" src="" alt="Cenário" class="hidden">
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-actions">
+            <button id="btn-become-dm" class="btn action">Virar Mestre</button>
+            <button id="btn-dm-screen" class="btn dm-btn hidden">Escudo do Mestre</button>
+        </div>
+    </div>
+
+    <!-- DM Screen Modal -->
+    <div id="dm-modal" class="modal hidden">
+        <div class="modal-content glass-panel dm-panel">
+            <div class="modal-header">
+                <h2 class="glow-text">Escudo do Mestre</h2>
+                <button id="btn-close-dm" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" data-target="dm-notes">Anotações</button>
+                <button class="tab-btn" data-target="dm-sheets">Fichas</button>
+                <button class="tab-btn" data-target="dm-images">Imagens</button>
+            </div>
+
+            <div class="tab-content">
+                <!-- Aba Anotações -->
+                <div id="dm-notes" class="tab-pane active">
+                    <div class="dm-notes-layout">
+                        <textarea placeholder="Anotações exclusivas da campanha..." class="dm-textarea"></textarea>
+                        <div class="private-dice-area glass-panel-inner">
+                            <h3>Rolagem Privada</h3>
+                            <div class="dice-buttons small">
+                                <button class="private-dice-btn" data-sides="4">d4</button>
+                                <button class="private-dice-btn" data-sides="6">d6</button>
+                                <button class="private-dice-btn" data-sides="8">d8</button>
+                                <button class="private-dice-btn" data-sides="10">d10</button>
+                                <button class="private-dice-btn" data-sides="12">d12</button>
+                                <button class="private-dice-btn" data-sides="20">d20</button>
+                                <button class="private-dice-btn" data-sides="100">d100</button>
+                            </div>
+                            <div id="private-dice-results" class="log-box small"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba Fichas -->
+                <div id="dm-sheets" class="tab-pane">
+                    <div class="sheets-layout">
+                        <div class="sheet-section glass-panel-inner">
+                            <h3>Fichas de Monstros</h3>
+                            <div id="monsters-list" class="sheet-list"></div>
+                            <button id="btn-add-monster" class="btn small outline-btn">+ Adicionar Monstro</button>
+                        </div>
+                        <div class="sheet-section glass-panel-inner">
+                            <h3>Fichas de NPC</h3>
+                            <div id="npcs-list" class="sheet-list"></div>
+                            <button id="btn-add-npc" class="btn small outline-btn">+ Adicionar NPC</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba Imagens -->
+                <div id="dm-images" class="tab-pane">
+                    <div class="images-layout">
+                        <div class="image-box glass-panel-inner">
+                            <h3>Imagens Privadas</h3>
+                            <p class="help-text">Apenas você vê. Adicione URLs.</p>
+                            <div class="input-flex">
+                                <input type="text" id="private-img-url" placeholder="URL da imagem (ex: https://...)">
+                                <button id="btn-add-private-img" class="btn small">Salvar</button>
+                            </div>
+                            <div id="private-images-list" class="image-grid"></div>
+                        </div>
+                        <div class="image-box glass-panel-inner">
+                            <h3>Imagens Públicas</h3>
+                            <p class="help-text">Atualiza a visão de todos os jogadores (Quadro 5).</p>
+                            <div class="input-flex">
+                                <input type="text" id="public-img-url" placeholder="URL da imagem para compartilhar...">
+                                <button id="btn-set-public-img" class="btn primary small">Compartilhar</button>
+                            </div>
+                            <div class="current-public">
+                                <h4>Visão Atual:</h4>
+                                <img id="dm-current-public-img" src="" alt="Nenhuma imagem enviada" class="hidden preview-img">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Templates -->
+    <template id="monster-template">
+        <div class="sheet-card">
+            <button class="btn-remove-sheet">&times;</button>
+            <input type="text" placeholder="Nome:" class="sheet-input bold">
+            <input type="text" placeholder="Dados de Dano (ex: 2d6+4):" class="sheet-input">
+            <textarea placeholder="Observação..." class="sheet-input"></textarea>
+        </div>
+    </template>
+    <template id="npc-template">
+        <div class="sheet-card">
+            <button class="btn-remove-sheet">&times;</button>
+            <input type="text" placeholder="Nome:" class="sheet-input bold">
+            <textarea placeholder="Observação..." class="sheet-input"></textarea>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+</html>
