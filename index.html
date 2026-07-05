@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/@panzoom/panzoom/dist/panzoom.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="vtt-engine.js"></script>
     <style>
 :root {
     --bg-color: #0b0c10;
@@ -605,6 +606,12 @@ ul#players-list li .dm-badge {
             <div class="panel image-panel">
                 <h2>Cenário / Imagem</h2>
                 <div class="image-container" id="public-image-display-wrapper" style="position: relative; overflow: hidden; touch-action: none;">
+                    <div id="vtt-toolbar" class="hidden" style="position: absolute; top: 10px; left: 10px; z-index: 20; background: rgba(0,0,0,0.8); padding: 5px; border-radius: 8px; display: flex; flex-direction: column; gap: 5px;">
+                        <button id="vtt-tool-pan" class="btn small active" title="Mover Câmera">🖐️</button>
+                        <button id="vtt-tool-wall" class="btn small" title="Desenhar Parede">🧱</button>
+                        <button id="vtt-tool-erase" class="btn small" title="Apagar Parede">🧹</button>
+                        <button id="vtt-tool-magic" class="btn small" title="Varinha Mágica (IA)">🪄</button>
+                    </div>
                     <div id="pdf-controls" class="hidden" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 8px; display: flex; gap: 15px; align-items: center;">
                         <button id="btn-prev-page" class="btn small">◀</button>
                         <span style="font-weight: bold;"><span id="page-num">1</span> / <span id="page-count">1</span></span>
@@ -612,9 +619,10 @@ ul#players-list li .dm-badge {
                     </div>
                     <button id="btn-open-public" class="btn small hidden" style="position: absolute; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">↗️ Abrir Aba</button>
                     <button id="btn-fullscreen-public" class="btn small hidden" style="position: absolute; top: 10px; right: 110px; z-index: 10; background: rgba(0,0,0,0.7); font-size: 0.7rem;">⛶ Expandir</button>
-                    <div id="public-image-display" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div id="public-image-display" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position:relative;">
                         <p class="placeholder-text" id="no-image-text">Nenhuma imagem compartilhada pelo mestre.</p>
-                        <div id="panzoom-wrapper" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; transform-origin: center center;">
+                        <canvas id="vtt-canvas" style="width:100%; height:100%; position:absolute; top:0; left:0; cursor: crosshair;" class="hidden"></canvas>
+                        <div id="panzoom-wrapper" class="hidden" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; transform-origin: center center;">
                             <img id="main-image" src="" alt="Cenário" class="hidden" style="max-width: 100%; max-height: 100%; object-fit: contain;">
                             <canvas id="pdf-canvas" class="hidden" style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
                         </div>
@@ -702,23 +710,32 @@ ul#players-list li .dm-badge {
                             <div id="private-images-list" class="image-grid"></div>
                         </div>
                         <div class="image-box glass-panel-inner">
-                            <h3>Imagens / PDFs Públicos</h3>
-                            <p class="help-text">Atualiza a visão de todos os jogadores (Quadro 5).</p>
+                            <h3>Mapa / Fundo Público</h3>
+                            <p class="help-text">Define o cenário. Imagens ou PDFs.</p>
                             <div class="input-flex" style="margin-bottom: 10px;">
                                 <input type="file" id="public-file-upload" accept="image/*,application/pdf" style="width: 100%; color: var(--text-primary);">
                             </div>
                             <div class="input-flex">
                                 <select id="public-img-type" class="btn small" style="background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
                                     <option value="img">Imagem</option>
-                                    <option value="pdf">PDF / Site</option>
+                                    <option value="pdf">PDF</option>
                                 </select>
-                                <input type="text" id="public-img-url" placeholder="Ou cole a URL aqui...">
-                                <button id="btn-set-public-img" class="btn primary small">Compartilhar</button>
+                                <input type="text" id="public-img-url" placeholder="URL do Mapa...">
+                                <button id="btn-set-public-img" class="btn primary small">Enviar Mapa</button>
                             </div>
-                            <div class="current-public" id="dm-public-preview-container">
-                                <h4>Visão Atual:</h4>
-                                <img id="dm-current-public-img" src="" alt="Nenhuma imagem enviada" class="hidden preview-img">
+                        </div>
+                        <div class="image-box glass-panel-inner" style="margin-top: 15px;">
+                            <h3>Adicionar Token</h3>
+                            <p class="help-text">Adiciona um personagem (pequeno) por cima do mapa.</p>
+                            <div class="input-flex" style="margin-bottom: 10px;">
+                                <input type="file" id="token-file-upload" accept="image/*" style="width: 100%; color: var(--text-primary);">
                             </div>
+                            <div class="input-flex" style="align-items: center; justify-content: space-between;">
+                                <label><input type="checkbox" id="token-is-ally" checked> Aliado (ilumina)</label>
+                                <label><input type="checkbox" id="token-is-locked"> Bloqueado 🔒</label>
+                                <button id="btn-add-token" class="btn primary small">Adicionar</button>
+                            </div>
+                            <button id="btn-clear-tokens" class="btn small outline-btn" style="width:100%; margin-top: 10px; border-color: red; color: red;">Remover Todos os Tokens</button>
                         </div>
                     </div>
                 </div>
@@ -772,7 +789,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = { nickname: '', isDM: false };
     
     // --- Estado da Sala ---
-    let roomState = { code: '', players: [], logs: [], publicImage: '', publicImageType: 'img', lastRoll: null };
+    let roomState = { code: '', players: [], logs: [], publicImage: '', publicImageType: 'img', lastRoll: null, tokens: [], walls: [] };
+    let vttEngine = null;
 
     // --- Funções de Paginação PDF ---
     window.renderPdfPage = function(pageNum) {
@@ -897,92 +915,89 @@ document.addEventListener('DOMContentLoaded', () => {
         publicDiceLog.scrollTop = publicDiceLog.scrollHeight;
         if(dmPublicDiceLog) dmPublicDiceLog.scrollTop = dmPublicDiceLog.scrollHeight;
 
-        // --- Renderização de PDF.js e Imagens com Panzoom ---
-        const mainImage = document.getElementById('main-image');
-        const pdfCanvas = document.getElementById('pdf-canvas');
+        // --- Renderização do VTT Engine (Mapa, Tokens, Paredes e Fog of War) ---
         const noImageText = document.getElementById('no-image-text');
-        const pdfControls = document.getElementById('pdf-controls');
+        const vttCanvas = document.getElementById('vtt-canvas');
         const panzoomWrapper = document.getElementById('panzoom-wrapper');
-        
+        const pdfControls = document.getElementById('pdf-controls');
+
+        if (!vttEngine) {
+            vttEngine = new VTTEngine('vtt-canvas');
+            vttEngine.onStateChange = (newState) => {
+                roomState.tokens = newState.tokens;
+                roomState.walls = newState.walls;
+                if(isHost) publishState();
+                else sendAction({ type: 'UPDATE_TOKENS', tokens: newState.tokens });
+            };
+            
+            // Setup Toolbar
+            const tools = ['pan', 'wall', 'erase', 'magic'];
+            tools.forEach(t => {
+                const btn = document.getElementById(`vtt-tool-${t}`);
+                if(btn) btn.onclick = (e) => {
+                    vttEngine.toolMode = t === 'pan' ? 'pan' : (t === 'wall' ? 'draw_wall' : (t === 'erase' ? 'erase_wall' : 'magic_wand'));
+                    document.querySelectorAll('#vtt-toolbar .btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                };
+            });
+        }
+
+        vttEngine.isDM = currentUser.isDM;
+        const toolbar = document.getElementById('vtt-toolbar');
+        if(toolbar) toolbar.classList.toggle('hidden', !currentUser.isDM);
+
         if (roomState.publicImage) {
             noImageText.classList.add('hidden');
             if(btnOpenPublic) btnOpenPublic.classList.remove('hidden');
             if(btnFullscreenPublic) btnFullscreenPublic.classList.remove('hidden');
             
-            if(btnOpenPublic) btnOpenPublic.onclick = () => window.open(roomState.publicImage, '_blank');
-            if(btnFullscreenPublic) btnFullscreenPublic.onclick = () => {
-                const wrapper = document.getElementById('public-image-display-wrapper');
-                if (!document.fullscreenElement) wrapper.requestFullscreen().catch(err => alert("Erro ao expandir: " + err.message));
-                else document.exitFullscreen();
-            };
+            if (roomState.publicImageType === 'pdf') {
+                vttCanvas.classList.add('hidden');
+                panzoomWrapper.classList.remove('hidden');
+                pdfControls.classList.remove('hidden');
+                
+                if (!publicPanzoom) {
+                    publicPanzoom = Panzoom(panzoomWrapper, { maxScale: 10, minScale: 0.5, contain: 'outside' });
+                    document.getElementById('public-image-display-wrapper').addEventListener('wheel', publicPanzoom.zoomWithWheel);
+                }
 
-            // Inicializa Panzoom se não existir
-            if (!publicPanzoom) {
-                publicPanzoom = Panzoom(panzoomWrapper, {
-                    maxScale: 10,
-                    minScale: 0.5,
-                    contain: 'outside'
-                });
-                const containerWrapper = document.getElementById('public-image-display-wrapper');
-                containerWrapper.addEventListener('wheel', publicPanzoom.zoomWithWheel);
-            }
-
-            // Somente recarrega se a imagem mudou
-            if (window.currentLoadedPublic !== roomState.publicImage) {
-                window.currentLoadedPublic = roomState.publicImage;
-                publicPanzoom.reset(); // Reseta zoom
-
-                if (roomState.publicImageType === 'pdf') {
+                if (window.currentLoadedPublic !== roomState.publicImage) {
+                    window.currentLoadedPublic = roomState.publicImage;
+                    publicPanzoom.reset();
+                    const mainImage = document.getElementById('main-image');
+                    const pdfCanvasEl = document.getElementById('pdf-canvas');
                     mainImage.classList.add('hidden');
-                    pdfCanvas.classList.remove('hidden');
-                    pdfControls.classList.remove('hidden');
+                    pdfCanvasEl.classList.remove('hidden');
                     
-                    // Carregar PDF via PDF.js
-                    const loadingTask = pdfjsLib.getDocument(roomState.publicImage);
-                    loadingTask.promise.then(function(pdf) {
+                    pdfjsLib.getDocument(roomState.publicImage).promise.then(function(pdf) {
                         currentPdfDoc = pdf;
                         currentPdfPage = 1;
                         document.getElementById('page-count').textContent = pdf.numPages;
                         window.renderPdfPage(currentPdfPage);
-                    }).catch(err => {
-                        console.error("Erro PDF:", err);
-                        alert("Não foi possível ler este PDF diretamente na mesa. Use o botão de 'Abrir Aba'.");
                     });
-                } else {
-                    pdfCanvas.classList.add('hidden');
-                    pdfControls.classList.add('hidden');
-                    mainImage.classList.remove('hidden');
-                    mainImage.src = roomState.publicImage;
                 }
-            }
-            
-            const dmContainer = document.getElementById('dm-public-preview-container');
-            if (dmContainer) {
-                dmContainer.innerHTML = '<h4>Visão Atual:</h4>';
-                if (roomState.publicImageType === 'pdf') {
-                    dmContainer.innerHTML += '<p style="color:var(--accent);">[PDF Compartilhado Ativo]</p>';
-                } else {
-                    let dmElem = document.createElement('img');
-                    dmElem.src = roomState.publicImage;
-                    dmElem.className = 'preview-img';
-                    dmElem.style.height = '150px';
-                    dmContainer.appendChild(dmElem);
+            } else {
+                // Modo VTT Engine
+                vttCanvas.classList.remove('hidden');
+                panzoomWrapper.classList.add('hidden');
+                pdfControls.classList.add('hidden');
+                
+                if (window.currentLoadedPublic !== roomState.publicImage) {
+                    window.currentLoadedPublic = roomState.publicImage;
+                    vttEngine.setMap(roomState.publicImage);
                 }
+                // Sincronizar Tokens e Paredes com a Engine
+                vttEngine.setTokens(roomState.tokens || []);
+                vttEngine.setWalls(roomState.walls || []);
             }
         } else {
             noImageText.classList.remove('hidden');
-            mainImage.classList.add('hidden');
-            pdfCanvas.classList.add('hidden');
+            vttCanvas.classList.add('hidden');
+            panzoomWrapper.classList.add('hidden');
             pdfControls.classList.add('hidden');
             if(btnOpenPublic) btnOpenPublic.classList.add('hidden');
             if(btnFullscreenPublic) btnFullscreenPublic.classList.add('hidden');
             window.currentLoadedPublic = null;
-            if (publicPanzoom) publicPanzoom.reset();
-            
-            const dmContainer = document.getElementById('dm-public-preview-container');
-            if (dmContainer) {
-                dmContainer.innerHTML = '<h4>Visão Atual:</h4><p class="help-text">Nenhum</p>';
-            }
         }
     }
 
@@ -1091,6 +1106,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             roomState.players.push({ name: data.nickname, isDM: false });
             roomState.logs.push(`<em>${data.nickname} entrou na sala!</em>`);
+            publishState();
+        }
+
+        if (data.type === 'UPDATE_TOKENS') {
+            roomState.tokens = data.tokens;
             publishState();
         }
 
@@ -1400,6 +1420,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 };
                 reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // Token Logic
+    const btnAddToken = document.getElementById('btn-add-token');
+    const tokenFileUpload = document.getElementById('token-file-upload');
+    const btnClearTokens = document.getElementById('btn-clear-tokens');
+    
+    if(btnAddToken) {
+        btnAddToken.addEventListener('click', () => {
+            const file = tokenFileUpload.files[0];
+            if(!file) return alert('Selecione uma imagem de Token primeiro!');
+            
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const isAlly = document.getElementById('token-is-ally').checked;
+                const isLocked = document.getElementById('token-is-locked').checked;
+                
+                const newToken = {
+                    id: 'tk_' + Math.random().toString(16).substr(2, 6),
+                    x: 200, y: 200, // Spawn no centro da tela
+                    src: evt.target.result,
+                    isAlly: isAlly,
+                    isLocked: isLocked,
+                    size: 80,
+                    label: 'Token'
+                };
+                
+                if (!roomState.tokens) roomState.tokens = [];
+                roomState.tokens.push(newToken);
+                sendAction({ type: 'UPDATE_TOKENS', tokens: roomState.tokens });
+                tokenFileUpload.value = '';
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+    
+    if(btnClearTokens) {
+        btnClearTokens.addEventListener('click', () => {
+            if(confirm('Tem certeza que deseja apagar todos os tokens? Isso não pode ser desfeito.')) {
+                sendAction({ type: 'UPDATE_TOKENS', tokens: [] });
             }
         });
     }
